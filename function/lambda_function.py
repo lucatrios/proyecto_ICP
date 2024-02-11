@@ -18,19 +18,20 @@ def download_file(url):
         return None
 
 
-def parseBody(event):
-    if 'body' in event:
-        body = json.loads(event['body'])
-        if 'img_id' in body:
-            img_id = body['img_id']
-            logger.info(f"img_id is {img_id}")
-            return img_id
-        else:
-            return None
+# def parseBody(event):
+#     if 'body' in event:
+#         body = json.loads(event['body'])
+#         logger.info(f"body is {body}")
+#         if 'img_id' in body:
+#             img_id = body['img_id']
+#             logger.info(f"img_id is {img_id}")
+#             return img_id
+#         else:
+#             return None
 
 
 def lambda_handler(event, context):
-    img_id = parseBody(event)
+    img_id = event.get
     if img_id is None:
         return {
             'statusCode': 400,
