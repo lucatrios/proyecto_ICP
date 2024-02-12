@@ -68,7 +68,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref BasicAWSApiGateway
-            Path: /get-file/{id}
+            Path: /get-file/{tag}
             Method: GET
             Auth:
               ApiKeyRequired: true
@@ -94,10 +94,19 @@ Resources:
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
+        - AttributeName: tag
+          AttributeType: S
       BillingMode: PAY_PER_REQUEST
       KeySchema:
         - AttributeName: id
           KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: tag-index
+          KeySchema:
+            - AttributeName: tag
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -125,12 +134,14 @@ Resources:
                   - "dynamodb:Scan"
                   - "dynamodb:UpdateItem"
                 Effect: "Allow"
-                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FilesTable}"
+                Resource:
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FilesTable}*"
         - PolicyName: LambdaFilesBucketPolicy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
                 Action:
+                  - "s3:PutObject"
                   - "s3:GetObject"
                   - "s3:ListBucket"
                 Effect: "Allow"
