@@ -3,7 +3,7 @@ Transform: AWS::Serverless-2016-10-31
 Description: >
   ProjectLambdaAPI
 
-  Sample SAM Template for ProjectLambdaAPI
+  SAM Template for ProjectLambdaAPI
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
@@ -41,7 +41,7 @@ Resources:
       KeyId: !Ref ApiKey
       KeyType: API_KEY
       UsagePlanId: !Ref ApiUsagePlan
-      
+
   BasicAWSApiGateway:
     Type: AWS::Serverless::Api
     Properties:
@@ -53,10 +53,11 @@ Resources:
   LambdaFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
+      FunctionName: project-lambda-api
       Environment:
         Variables:
-          LOOKUP_TABLE : !Ref FilesTable
-          FILES_BUCKET : !Ref FilesBucket
+          LOOKUP_TABLE: !Ref FilesTable
+          FILES_BUCKET: !Ref FilesBucket
       CodeUri: lambda_app/
       Handler: app.lambda_handler
       Runtime: python3.10
@@ -71,6 +72,8 @@ Resources:
             Method: GET
             Auth:
               ApiKeyRequired: true
+      Role: !GetAtt LambdaExecutionRole.Arn
+
   FilesBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -84,7 +87,7 @@ Resources:
   FilesTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: files-lookup
+      TableName: project-lambda-api-files-lookup
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -92,6 +95,42 @@ Resources:
       KeySchema:
         - AttributeName: id
           KeyType: HASH
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: lambda-execution-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: LambdaFilesTablePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+                Action:
+                  - "dynamodb:DeleteItem"
+                  - "dynamodb:GetItem"
+                  - "dynamodb:PutItem"
+                  - "dynamodb:Query"
+                  - "dynamodb:Scan"
+                  - "dynamodb:UpdateItem"
+                Effect: "Allow"
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FilesTable}"
+        - PolicyName: LambdaFilesBucketPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+                Action:
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
+                Effect: "Allow"
+                Resource: !Sub "arn:aws:s3:::${FilesBucket}/*"
+
 
 
 
