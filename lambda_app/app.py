@@ -1,6 +1,34 @@
 import json
 
-# import requests
+import logging
+import boto3
+from botocore.exceptions import ClientError
+
+logging.basicConfig(level=logging.INFO)
+
+
+def create_presigned_url(bucket_name, object_name, expiration=3600):
+    """Generate a presigned URL to share an S3 object
+
+    :param bucket_name: string
+    :param object_name: string
+    :param expiration: Time in seconds for the presigned URL to remain valid
+    :return: Presigned URL as string. If error, returns None.
+    """
+
+    # Generate a presigned URL for the S3 object
+    s3_client = boto3.client('s3')
+    try:
+        response = s3_client.generate_presigned_url('get_object',
+                                                    Params={'Bucket': bucket_name,
+                                                            'Key': object_name},
+                                                    ExpiresIn=expiration)
+    except ClientError as e:
+        logging.error(e)
+        return None
+
+    # The response contains the presigned URL
+    return response
 
 
 def lambda_handler(event, context):
@@ -25,9 +53,29 @@ def lambda_handler(event, context):
         Return doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html
     """
 
+    file_id = event['pathParameters']['id']
+
+    # logging.INFO(f"file id is {file_id}")
+
+    dynamo_db = boto3.resource('dynamodb')
+    table = dynamo_db.Table('project-lambda-api-files-lookup')
+    response = table.get_item(
+        Key={
+            'id': file_id
+        }
+    )
+    item = response['Item']
+
+    # logging.INFO(f"Item is {item}")
+
+    uri = item.get('uri')
+    signed_url = create_presigned_url('project-lambda-api-files', uri)
+
+    # logging.INFO(f"Signed url is {signed_url}")
+
     return {
         "statusCode": 200,
         "body": json.dumps({
-            "message": "hello world",
+            "message": signed_url,
         }),
     }

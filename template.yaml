@@ -73,6 +73,9 @@ Resources:
             Auth:
               ApiKeyRequired: true
       Role: !GetAtt LambdaExecutionRole.Arn
+      LoggingConfig:
+        ApplicationLogLevel: INFO
+        LogFormat: JSON
 
   FilesBucket:
     Type: AWS::S3::Bucket
