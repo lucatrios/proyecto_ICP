@@ -11,7 +11,7 @@ from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 logging.basicConfig(level=logging.INFO)
-
+S3_BUCKET = 'project-lambda-api-files'
 
 def create_zip(tag, files_temp_dir, zip_temp_dir):
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -28,11 +28,10 @@ def create_zip(tag, files_temp_dir, zip_temp_dir):
     return zip_path
 
 
-def upload_file(zip_path, bucket, object_name=None):
+def upload_file(zip_path, object_name=None):
     """Upload a file to an S3 bucket
 
     :param zip_path: File to upload
-    :param bucket: Bucket to upload to
     :param object_name: S3 object name. If not specified then file_name is used
     :return: True if file was uploaded, else False
     """
@@ -44,29 +43,28 @@ def upload_file(zip_path, bucket, object_name=None):
     # Upload the file
     s3_client = boto3.client('s3')
     try:
-        s3_client.upload_file(zip_path, bucket, object_name)
+        s3_client.upload_file(zip_path, S3_BUCKET, object_name)
     except ClientError as e:
         logging.error(e)
         return False
     return True
 
 
-def download_file(bucket_name, object_name, files_temp_dir):
+def download_file(object_name, files_temp_dir):
     s3 = boto3.client('s3')
     file_path = os.path.join(files_temp_dir, object_name)
     try:
         with open(file_path, 'wb') as f:
-            s3.download_fileobj(bucket_name, object_name, f)
+            s3.download_fileobj(S3_BUCKET, object_name, f)
     except ClientError as e:
         logging.error(e)
         return None
     return 0
 
 
-def create_presigned_url(bucket_name, object_name, expiration=3600):
+def create_presigned_url(object_name, expiration=3600):
     """Generate a presigned URL to share an S3 object
 
-    :param bucket_name: string
     :param object_name: string
     :param expiration: Time in seconds for the presigned URL to remain valid
     :return: Presigned URL as string. If error, returns None.
@@ -76,7 +74,7 @@ def create_presigned_url(bucket_name, object_name, expiration=3600):
     s3_client = boto3.client('s3')
     try:
         response = s3_client.generate_presigned_url('get_object',
-                                                    Params={'Bucket': bucket_name,
+                                                    Params={'Bucket': S3_BUCKET,
                                                             'Key': object_name},
                                                     ExpiresIn=expiration)
     except ClientError as e:
@@ -113,10 +111,9 @@ def lambda_handler(event, context):
 
     tag = event['pathParameters']['tag']
 
-    logging.info(f"Tag is {tag}")
-
     dynamo_db = boto3.resource('dynamodb')
 
+    logging.info(f"Start querying DynamoDB using GSI {tag}")
     try:
         table = dynamo_db.Table('project-lambda-api-files-lookup')
         response = table.query(
@@ -132,6 +129,16 @@ def lambda_handler(event, context):
             }),
         }
 
+    logging.info(f"DynamoDB response is {response}")
+
+    if len(response['Items']) == 0:
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "message": f"No Items found from DynamoDB with GSI {tag}",
+            }),
+        }
+
     items = response['Items']
 
     with tempfile.TemporaryDirectory() as files_temp_dir, tempfile.TemporaryDirectory() as zip_temp_dir:
@@ -141,15 +148,14 @@ def lambda_handler(event, context):
             for item in items:
                 logging.info(f"Found item: {item}")
                 uri = item.get('uri')
-                logging.info(f"Uri is: {uri}")
-                download_file('project-lambda-api-files', uri, files_temp_dir)
-                logging.info(f"Correctly downloaded file {uri}")
+                download_file(uri, files_temp_dir)
+                logging.info(f"Correctly downloaded file {uri} from Amazon S3 bucket {S3_BUCKET}")
             zip_path = create_zip(tag, files_temp_dir, zip_temp_dir)
             object_name = os.path.basename(zip_path)
             logging.info(f"Correctly created zip file {object_name}")
-            upload_file(zip_path, 'project-lambda-api-files')
-            logging.info(f"Correctly uploaded zip file {object_name} to Amazon S3")
-            signed_url = create_presigned_url('project-lambda-api-files', object_name)
+            upload_file(zip_path)
+            logging.info(f"Correctly uploaded zip file {object_name} to Amazon S3 bucket {S3_BUCKET}")
+            signed_url = create_presigned_url(object_name)
         except Exception as e:
             logging.error(e)
             return {
