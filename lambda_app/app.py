@@ -53,25 +53,45 @@ def lambda_handler(event, context):
         Return doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html
     """
 
+    logging.info("Start calling Lambda Function")
+
     file_id = event['pathParameters']['id']
 
-    # logging.INFO(f"file id is {file_id}")
+    logging.info(f"file id is {file_id}")
 
     dynamo_db = boto3.resource('dynamodb')
-    table = dynamo_db.Table('project-lambda-api-files-lookup')
-    response = table.get_item(
-        Key={
-            'id': file_id
+    try:
+        table = dynamo_db.Table('project-lambda-api-files-lookup')
+        response = table.get_item(
+            Key={
+                'id': file_id
+            }
+        )
+    except Exception as e:
+        logging.error(e)
+        return {
+            "statusCode": 400,
+            "body": json.dumps({
+                "message": "An error occurred while retrieving items from Amazon DynamoDB",
+            }),
         }
-    )
+
     item = response['Item']
 
-    # logging.INFO(f"Item is {item}")
+    logging.info(f"Item is {item}")
 
     uri = item.get('uri')
     signed_url = create_presigned_url('project-lambda-api-files', uri)
 
-    # logging.INFO(f"Signed url is {signed_url}")
+    if signed_url is None:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({
+                "message": "An error occurred while retrieving data from Amazon S3",
+            }),
+        }
+
+    logging.info(f"Signed url is {signed_url}")
 
     return {
         "statusCode": 200,

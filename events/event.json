@@ -4,7 +4,7 @@
   "httpMethod": "GET",
   "isBase64Encoded": false,
   "pathParameters": {
-    "id": "123"
+    "id": "1"
   },
   "stageVariables": {
   },
