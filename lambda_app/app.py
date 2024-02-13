@@ -8,8 +8,8 @@ import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
-S3_BUCKET = 'project-lambda-api-files'
-DYNAMO_DB_TABLE = 'project-lambda-api-files-lookup'
+S3_BUCKET = os.environ['FILES_BUCKET']
+DYNAMO_DB_TABLE = os.environ['LOOKUP_TABLE']
 
 
 def create_zip(tag, files_folder, zip_folder):
