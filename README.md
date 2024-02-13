@@ -21,7 +21,7 @@ To use the SAM CLI, you need the following tools.
 To deploy the application, run the following in your shell:
 
 ```bash
-sam deploy --capabilities CAPABILITY_NAMED_IAM
+sam deploy
 ```
 
 To destroy all objects created, run the following command in your shell:

@@ -36,7 +36,7 @@ def create_zip(tag, files_folder, zip_folder):
 def upload_file(file_name, object_name=None):
     """Upload a file to an S3 bucket
 
-    :param zip_path: File to upload
+    :param file_name: File to upload
     :param object_name: S3 object name. If not specified then file_name is used
     :return: True if file was uploaded, else False
     """
