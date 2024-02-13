@@ -8,7 +8,7 @@ Description: >
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 3
+    Timeout: 15
 
 Resources:
   ApiKey:
@@ -22,11 +22,11 @@ Resources:
   ApiUsagePlan:
     Type: "AWS::ApiGateway::UsagePlan"
     DependsOn:
-      - BasicAWSApiGatewaystagStage
+      - BasicAWSApiGatewayDevStage
     Properties:
       ApiStages:
         - ApiId: !Ref BasicAWSApiGateway
-          Stage: stag
+          Stage: Dev
       Description: !Join [ " ", [ { "Ref": "AWS::StackName" }, "usage plan" ] ]
       Quota:
         Limit: 1000
@@ -45,13 +45,13 @@ Resources:
   BasicAWSApiGateway:
     Type: AWS::Serverless::Api
     Properties:
-      Name: Basic AWS Api Gateway
-      StageName: stag
+      Name: project-lambda-api-gateway
+      StageName: Dev
       Auth:
-        ApiKeyRequired: true # sets for all methods
+        ApiKeyRequired: true
 
   LambdaFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
     Properties:
       FunctionName: project-lambda-api
       Environment:
@@ -145,8 +145,9 @@ Resources:
                   - "s3:GetObject"
                   - "s3:ListBucket"
                 Effect: "Allow"
-                Resource: !Sub "arn:aws:s3:::${FilesBucket}/*"
-
+                Resource:
+                  - !Sub "arn:aws:s3:::${FilesBucket}"
+                  - !Sub "arn:aws:s3:::${FilesBucket}/*"
 
 
 

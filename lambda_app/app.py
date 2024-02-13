@@ -1,34 +1,39 @@
 import json
-
 import logging
 import os
 import tempfile
 import zipfile
 from datetime import datetime
-
 import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
-logging.basicConfig(level=logging.INFO)
 S3_BUCKET = 'project-lambda-api-files'
+DYNAMO_DB_TABLE = 'project-lambda-api-files-lookup'
 
-def create_zip(tag, files_temp_dir, zip_temp_dir):
+
+def create_zip(tag, files_folder, zip_folder):
+    """Create a zip using files from a specified folder
+
+    :param tag: Prefix used to construct zip file name
+    :param files_folder: Folders that contains files to be zipped
+    :param zip_folder: Folder to create zip file
+    """
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     zip_file_name = f"{tag}_{timestamp}.zip"
-    zip_path = os.path.join(zip_temp_dir, zip_file_name)
+    zip_path = os.path.join(zip_folder, zip_file_name)
     # Open a new ZIP file in write mode
     with zipfile.ZipFile(zip_path, 'a', zipfile.ZIP_DEFLATED) as zipf:
         # Iterate through all files in the folder
-        for file in os.listdir(files_temp_dir):
+        for file in os.listdir(files_folder):
             # Get the full path of the file
-            file_path = os.path.join(files_temp_dir, file)
+            file_path = os.path.join(files_folder, file)
             # Add the file to the ZIP file using its own file name
             zipf.write(file_path, file)
     return zip_path
 
 
-def upload_file(zip_path, object_name=None):
+def upload_file(file_name, object_name=None):
     """Upload a file to an S3 bucket
 
     :param zip_path: File to upload
@@ -38,34 +43,48 @@ def upload_file(zip_path, object_name=None):
 
     # If S3 object_name was not specified, use file_name
     if object_name is None:
-        object_name = os.path.basename(zip_path)
+        object_name = os.path.basename(file_name)
 
     # Upload the file
     s3_client = boto3.client('s3')
     try:
-        s3_client.upload_file(zip_path, S3_BUCKET, object_name)
+        s3_client.upload_file(file_name, S3_BUCKET, object_name)
     except ClientError as e:
         logging.error(e)
         return False
     return True
 
 
-def download_file(object_name, files_temp_dir):
+def download_file(object_name, folder):
+    """Download file from S3 bucket
+
+    :param object_name: S3 object name
+    :param folder: Folder to upload downloaded files
+    """
     s3 = boto3.client('s3')
-    file_path = os.path.join(files_temp_dir, object_name)
-    try:
-        with open(file_path, 'wb') as f:
-            s3.download_fileobj(S3_BUCKET, object_name, f)
-    except ClientError as e:
-        logging.error(e)
-        return None
-    return 0
+    file_path = os.path.join(folder, object_name)
+    with open(file_path, 'wb') as f:
+        s3.download_fileobj(S3_BUCKET, object_name, f)
+
+
+def execute_query(gsi):
+    """Execute a query on Dynamo DB table
+
+    :param gsi: Global secondary index
+    """
+    dynamo_db = boto3.resource('dynamodb')
+    table = dynamo_db.Table(DYNAMO_DB_TABLE)
+    response = table.query(
+        IndexName='tag-index',
+        KeyConditionExpression=Key('tag').eq(gsi)
+    )
+    return response
 
 
 def create_presigned_url(object_name, expiration=3600):
     """Generate a presigned URL to share an S3 object
 
-    :param object_name: string
+    :param object_name: S3 object name
     :param expiration: Time in seconds for the presigned URL to remain valid
     :return: Presigned URL as string. If error, returns None.
     """
@@ -111,15 +130,9 @@ def lambda_handler(event, context):
 
     tag = event['pathParameters']['tag']
 
-    dynamo_db = boto3.resource('dynamodb')
-
     logging.info(f"Start querying DynamoDB using GSI {tag}")
     try:
-        table = dynamo_db.Table('project-lambda-api-files-lookup')
-        response = table.query(
-            IndexName='tag-index',
-            KeyConditionExpression=Key('tag').eq(tag)
-        )
+        response = execute_query(tag)
     except Exception as e:
         logging.error(e)
         return {
